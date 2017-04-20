@@ -63,7 +63,7 @@ public class WikiCrawler {
 
         @Override
         public int compareTo(UrlPriority o) {
-            return this.priority - o.priority;
+            return o.priority - this.priority;
         }
     }
 }
