@@ -41,11 +41,11 @@ public class WikiCrawler {
         for (Element link : links) {
             String href = link.attr("href"); //Get url from link.
             if (href.equals("") || !href.startsWith("/wiki/")) continue; //Go to next link if url doesn't exist or couldn't be found or leaves Wikipedia.
-            if (step < steps) urls.add(new UrlPriority("https://en.wikipedia.org" + href, (byte)(step+1)));
+            if (step < steps) urls.add(new UrlPriority("https://en.wikipedia.org" + href, (byte)(step+1))); //Add page to priority queue if next step is within upper bound.
         }
     }
 
-    private class UrlPriority {
+    private class UrlPriority implements Comparable<UrlPriority> {
         private String url;
         private int priority;
         private byte step;
@@ -59,6 +59,11 @@ public class WikiCrawler {
         private int calcPriority(String url) {
             //TODO: Insert greedy algorithm.
             return 0;
+        }
+
+        @Override
+        public int compareTo(UrlPriority o) {
+            return this.priority - o.priority;
         }
     }
 }
