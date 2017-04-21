@@ -16,12 +16,28 @@ import java.util.concurrent.TimeUnit;
 public class WikiCrawler {
     private static final Object key = new Object();
     private ThreadPoolExecutor tPool = new ThreadPoolExecutor(5, 10,
-            50000L, TimeUnit.MILLISECONDS, new PriorityBlockingQueue<>(11,
-            (o1, o2) -> {
-                if (!(o1 instanceof UrlPriority) || !(o2 instanceof UrlPriority)) return 0;
-                return ((UrlPriority) o1).compareTo(((UrlPriority) o2));
-            }));
+            50000L, TimeUnit.MILLISECONDS,
+            new PriorityBlockingQueue<>(11,
+                (o1, o2) -> {
+                    if (!(o1 instanceof WikiPage) || !(o2 instanceof WikiPage)) return 0;
+                    return ((WikiPage) o1).compareTo(((WikiPage) o2));
+                }
+            )
+    );
     private byte steps = 3;
+
+    public WikiCrawler() {
+        this((byte)3);
+    }
+
+    public WikiCrawler(byte steps) {
+        this("https://en.wikipedia.org/wiki/thing", steps);
+    }
+
+    public WikiCrawler(String start, byte steps) {
+        this.steps = (byte)(steps % 6);
+        tPool.submit(new WikiPage(start, (byte)0));
+    }
 
     /*private void readPage(String url, byte step) {
         //Get document from url. Make thread sleep so only 1 page can be received per second, as demanded by Wikipedia.
@@ -46,16 +62,16 @@ public class WikiCrawler {
         for (Element link : links) {
             String href = link.attr("href"); //Get url from link.
             if (href.equals("") || !href.startsWith("/wiki/")) continue; //Go to next link if url doesn't exist or couldn't be found or leaves Wikipedia.
-            if (step < steps) urls.add(new UrlPriority("https://en.wikipedia.org" + href, (byte)(step+1))); //Add page to priority queue if next step is within upper bound.
+            if (step < steps) urls.add(new WikiPage("https://en.wikipedia.org" + href, (byte)(step+1))); //Add page to priority queue if next step is within upper bound.
         }
     }*/
 
-    private class UrlPriority implements Comparable<UrlPriority>, Runnable {
+    private class WikiPage implements Comparable<WikiPage>, Runnable {
         private String url;
         private int priority;
         private byte step;
 
-        private UrlPriority(String url, byte step) {
+        private WikiPage(String url, byte step) {
             this.url = url;
             this.priority = calcPriority(url);
             this.step = step;
@@ -67,7 +83,7 @@ public class WikiCrawler {
         }
 
         @Override
-        public int compareTo(UrlPriority o) {
+        public int compareTo(WikiPage o) {
             return o.priority - this.priority;
         }
 
@@ -95,7 +111,7 @@ public class WikiCrawler {
             for (Element link : links) {
                 String href = link.attr("href"); //Get url from link.
                 if (href.equals("") || !href.startsWith("/wiki/")) continue; //Go to next link if url doesn't exist or couldn't be found or leaves Wikipedia.
-                if (step < steps) tPool.submit(new UrlPriority("https://en.wikipedia.org" + href, (byte)(step+1))); //Add page to threadpool if next step is within upper bound.
+                if (step < steps) tPool.submit(new WikiPage("https://en.wikipedia.org" + href, (byte)(step+1))); //Add page to threadpool if next step is within upper bound.
             }
         }
     }
