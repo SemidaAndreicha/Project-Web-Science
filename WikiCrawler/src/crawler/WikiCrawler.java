@@ -7,16 +7,18 @@ import org.jsoup.select.Elements;
 
 import java.io.IOException;
 import java.util.PriorityQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author Marik Boswijk
  */
 public class WikiCrawler {
     private static final Object key = new Object();
-    private PriorityQueue<UrlPriority> urls;
-    private ThreadPoolExecutor tPool;
-    private byte steps;
+    private PriorityQueue<UrlPriority> urls = new PriorityQueue<>((o1, o2) -> o2.priority - o1.priority);
+    private ThreadPoolExecutor tPool = new ThreadPoolExecutor(5, 10, 50000L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+    private byte steps = 3;
 
     private void readPage(String url, byte step) {
         //Get document from url. Make thread sleep so only 1 page can be received per second, as demanded by Wikipedia.
@@ -37,7 +39,7 @@ public class WikiCrawler {
 
         Element main = doc.body().select("div#bodyContent").first(); //Get all div tags that match id "bodyContent". Only one could match, so first is chosen.
         if (main == null) return; //Return if no text exists or text couldn't be found.
-        Elements links = main.select("a"); //Get all a tags in the body.
+        Elements links = main.select("a"); //Get all a tags in the text.
         for (Element link : links) {
             String href = link.attr("href"); //Get url from link.
             if (href.equals("") || !href.startsWith("/wiki/")) continue; //Go to next link if url doesn't exist or couldn't be found or leaves Wikipedia.
