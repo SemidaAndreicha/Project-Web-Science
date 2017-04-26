@@ -20,7 +20,7 @@ public class WikiCrawler {
             new PriorityBlockingQueue<>(11,
                 (o1, o2) -> {
                     if (!(o1 instanceof WikiPage) || !(o2 instanceof WikiPage)) return 0;
-                    return ((WikiPage) o1).compareTo(((WikiPage) o2));
+                    return ((WikiPage) o1).compareTo((WikiPage) o2);
                 }
             )
     );
@@ -66,6 +66,18 @@ public class WikiCrawler {
         }
     }*/
 
+    private static long time;
+    private static int counter = 0;
+
+    public static void main(String[] args) {
+        time = System.currentTimeMillis();
+        WikiCrawler c = new WikiCrawler("https://en.wikipedia.org/wiki/William_Cleaver_Wilkinson", (byte)1);
+    }
+
+    public static void stop() {
+        System.out.println("Time: " + (System.currentTimeMillis() - time) + " Pages: " + counter);
+    }
+
     private class WikiPage implements Comparable<WikiPage>, Runnable {
         private String url;
         private int priority;
@@ -89,6 +101,7 @@ public class WikiCrawler {
 
         @Override
         public void run() {
+            counter++;
             //Get document from url. Make thread sleep so only 1 page can be received per second, as demanded by Wikipedia.
             Document doc;
             synchronized (key) {
@@ -113,6 +126,8 @@ public class WikiCrawler {
                 if (href.equals("") || !href.startsWith("/wiki/")) continue; //Go to next link if url doesn't exist or couldn't be found or leaves Wikipedia.
                 if (step < steps) tPool.submit(new WikiPage("https://en.wikipedia.org" + href, (byte)(step+1))); //Add page to threadpool if next step is within upper bound.
             }
+
+            if (tPool.getQueue().isEmpty()) stop();
         }
     }
 }

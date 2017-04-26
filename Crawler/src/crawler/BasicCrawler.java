@@ -8,7 +8,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 /**
- * @made by Tal Buaron 
+ * @author Tal Buaron
  */
 public class BasicCrawler {
 	private static final int MAX_DEPTH = 2; //max depth
@@ -22,33 +22,34 @@ public class BasicCrawler {
 	
 	/**
 	 * the crawler takes two parameters:
-	 * @param URL - url to start from
-	 * @param depth - the maximum depth you want to go
+	 * @param url - url to start from
+	 * @param depth - the depth the crawler is at
 	 */
-	public void findPage(String URL, int depth) {
-		while ((!pagesVisited.contains(URL) && (depth < MAX_DEPTH))) { //while page wasn't visited and depth is still in condition, keep going
+	public void findPage(String url, int depth) {
+		if ((!pagesVisited.contains(url) && (depth < MAX_DEPTH))) { //while page wasn't visited and depth is still in condition, keep going
 			try {
-				Document document = Jsoup.connect(URL).get(); //connect to the url
-				Elements linksOnPage = document.select("a[href]"); //select all the links from that url
-				String[] titles = document.title().split(","); //array of strings of all titles
-				
-				for (String title : titles) { //for every title in titles print the title and depth
+				pagesVisited.add(url);
+				Document document = Jsoup.connect(url).get(); //connect to the url
+				Elements linksOnPage = document.select("a"); //select all the links from that url
+				String title = document.title(); //array of strings of all titles
+
+				System.out.println(title + " depth: " + depth);
 					
-					System.out.println(title + " depth: " + depth);
-					
-					if (title.equalsIgnoreCase(other)) { //if the title match the page we look for, print found and degrees of seperation
-						System.out.println("Found page " + title + " in " + depth + " Degrees of seperation");
-						System.exit(0); //stop the operation
-					}
+				if (title.equalsIgnoreCase(other)) { //if the title match the page we look for, print found and degrees of separation
+					System.out.println("Found page " + title + " in " + depth
+							+ (depth == 1 ? " degree of separation" : " degrees of separation")
+					);
+					return;
 				}
 				
-				depth++; //increment the depth everytime you go deeper from starting page
+				//depth++; //increment the depth every time you go deeper from starting page
 				for (Element page : linksOnPage) { //for every page in the links we found
-					findPage(page.attr("abs:href"), depth); //do recursion 
+					String href = page.attr("href");
+					if (href.startsWith("/wiki/")) findPage("https://en.wikipedia.org" + href, depth + 1); //do recursion
 				}
-				
+
 			} catch (IOException e) {
-				System.err.println("For '" + URL + "': " + e.getMessage());
+				System.err.println("For '" + url + "': " + e.getMessage());
 			}
 		}
 
