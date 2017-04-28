@@ -6,6 +6,9 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.text.Normalizer;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -24,7 +27,7 @@ public class WikiCrawler {
                 }
             )
     );
-    private byte steps = 3;
+    private final byte steps;
 
     public WikiCrawler() {
         this((byte)3);
@@ -35,7 +38,7 @@ public class WikiCrawler {
     }
 
     public WikiCrawler(String start, byte steps) {
-        this.steps = (byte)(steps % 6);
+        this.steps = (byte)Math.min(steps, 6);
         tPool.submit(new WikiPage(start, (byte)0));
     }
 
@@ -74,7 +77,7 @@ public class WikiCrawler {
         WikiCrawler c = new WikiCrawler("https://en.wikipedia.org/wiki/William_Cleaver_Wilkinson", (byte)1);
     }
 
-    public static void stop() {
+    private static void stop() {
         System.out.println("Time: " + (System.currentTimeMillis() - time) + " Pages: " + counter);
     }
 
@@ -124,6 +127,11 @@ public class WikiCrawler {
             for (Element link : links) {
                 String href = link.attr("href"); //Get url from link.
                 if (href.equals("") || !href.startsWith("/wiki/")) continue; //Go to next link if url doesn't exist or couldn't be found or leaves Wikipedia.
+                try {
+                    href = URLDecoder.decode(href, doc.charset().displayName());
+                } catch (UnsupportedEncodingException e) {
+                    e.printStackTrace();
+                }
                 if (step < steps) tPool.submit(new WikiPage("https://en.wikipedia.org" + href, (byte)(step+1))); //Add page to threadpool if next step is within upper bound.
             }
 
