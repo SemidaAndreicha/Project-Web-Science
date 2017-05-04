@@ -8,7 +8,10 @@ import org.jsoup.select.Elements;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
-import java.text.Normalizer;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -28,18 +31,22 @@ public class WikiCrawler {
             )
     );
     private final byte steps;
+    private final String end;
+    private List<String> sequence = null;
+    private Set<String> visited = new HashSet<>();
 
     public WikiCrawler() {
         this((byte)3);
     }
 
     public WikiCrawler(byte steps) {
-        this("https://en.wikipedia.org/wiki/thing", steps);
+        this("https://en.wikipedia.org/wiki/thing", steps, "https://en.wikipedia.org/wiki/New_Haven,_Connecticut");
     }
 
-    public WikiCrawler(String start, byte steps) {
+    public WikiCrawler(String start, byte steps, String end) {
         this.steps = (byte)Math.min(steps, 6);
-        tPool.submit(new WikiPage(start, (byte)0));
+        tPool.submit(new WikiPage(start, (byte)0, new LinkedList<>()));
+        this.end = end;
     }
 
     /*private void readPage(String url, byte step) {
@@ -74,7 +81,7 @@ public class WikiCrawler {
 
     public static void main(String[] args) {
         time = System.currentTimeMillis();
-        WikiCrawler c = new WikiCrawler("https://en.wikipedia.org/wiki/William_Cleaver_Wilkinson", (byte)1);
+        WikiCrawler c = new WikiCrawler("https://en.wikipedia.org/wiki/Special:Random", (byte)1, "https://en.wikipedia.org/wiki/Lee_Chiao-ju");
     }
 
     private static void stop() {
@@ -85,11 +92,13 @@ public class WikiCrawler {
         private String url;
         private int priority;
         private byte step;
+        private List<String> previous;
 
-        private WikiPage(String url, byte step) {
+        private WikiPage(String url, byte step, List<String> previous) {
             this.url = url;
             this.priority = calcPriority(url);
             this.step = step;
+            this.previous = previous;
         }
 
         private int calcPriority(String url) {
@@ -105,6 +114,10 @@ public class WikiCrawler {
         @Override
         public void run() {
             counter++;
+            //Make sure this hasn't been visited yet. Otherwise, add it to visited.
+            if (visited.contains(url)) return;
+            visited.add(url);
+
             //Get document from url. Make thread sleep so only 1 page can be received per second, as demanded by Wikipedia.
             Document doc;
             synchronized (key) {
@@ -121,6 +134,14 @@ public class WikiCrawler {
                 }
             }
 
+            previous.add(doc.title());
+
+            //Check if the current page is the one being searched for.
+            if (url.equalsIgnoreCase(end)) {
+                if (sequence == null || sequence.size() > previous.size()) sequence = previous;
+                return;
+            }
+
             Element main = doc.body().select("div#bodyContent").first(); //Get all div tags that match id "bodyContent". Only one could match, so first is chosen.
             if (main == null) return; //Return if no text exists or text couldn't be found.
             Elements links = main.select("a"); //Get all a tags in the text.
@@ -128,14 +149,17 @@ public class WikiCrawler {
                 String href = link.attr("href"); //Get url from link.
                 if (href.equals("") || !href.startsWith("/wiki/")) continue; //Go to next link if url doesn't exist or couldn't be found or leaves Wikipedia.
                 try {
-                    href = URLDecoder.decode(href, doc.charset().displayName());
+                    href = URLDecoder.decode(href, doc.charset().displayName()); //Translate unicode to actual characters using charset of page.
                 } catch (UnsupportedEncodingException e) {
                     e.printStackTrace();
                 }
-                if (step < steps) tPool.submit(new WikiPage("https://en.wikipedia.org" + href, (byte)(step+1))); //Add page to threadpool if next step is within upper bound.
+                if (step < steps) tPool.submit(new WikiPage("https://en.wikipedia.org" + href, (byte)(step+1), previous)); //Add page to threadpool if next step is within upper bound.
             }
 
-            if (tPool.getQueue().isEmpty()) stop();
+            if (tPool.getQueue().isEmpty()) {
+                stop();
+                tPool.shutdown();
+            }
         }
     }
 }
