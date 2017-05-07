@@ -57,37 +57,17 @@ public class WikiCrawler {
         this.end = end;
     }
 
-/*
-* private void readPage(String url, byte step) { //Get document from url.
-* Make thread sleep so only 1 page can be received per second, as demanded
-* by Wikipedia. Document doc; synchronized (key) { try { doc =
-* Jsoup.connect(url).get(); } catch (IOException e) { e.printStackTrace();
-* return; } try { Thread.sleep(1000); } catch (InterruptedException e) {
-* e.printStackTrace(); } }
-*
-* Element main = doc.body().select("div#bodyContent").first(); //Get all
-* div tags that match id "bodyContent". Only one could match, so first is
-* chosen. if (main == null) return; //Return if no text exists or text
-* couldn't be found. Elements links = main.select("a"); //Get all a tags in
-* the text. for (Element link : links) { String href = link.attr("href");
-* //Get url from link. if (href.equals("") || !href.startsWith("/wiki/"))
-* continue; //Go to next link if url doesn't exist or couldn't be found or
-* leaves Wikipedia. if (step < steps) urls.add(new
-* WikiPage("https://en.wikipedia.org" + href, (byte)(step+1))); //Add page
-* to priority queue if next step is within upper bound. } }
-*/
-
     private static long time;
     private static int counter = 0;
 
     public static void main(String[] args) {
         time = System.currentTimeMillis();
-        WikiCrawler c = new WikiCrawler("https://en.wikipedia.org/wiki/Jakob_Jakobeus", (byte) 1,
+        WikiCrawler c = new WikiCrawler("https://en.wikipedia.org/wiki/Question_mark_(disambiguation)", (byte) 1,
                 "https://en.wikipedia.org/wiki/Lee_Chiao-ju");
     }
 
-    private static void stop() {
-        System.out.println("Time: " + (System.currentTimeMillis() - time) + " Pages: " + counter);
+    private void stop() {
+        System.out.println("Time: " + (System.currentTimeMillis() - time) + " Pages: " + counter + " Finished: " + (sequence != null));
     }
 
     private class WikiPage implements Comparable<WikiPage>, Runnable {
@@ -121,29 +101,9 @@ public class WikiCrawler {
 
         @Override
         public void run() {
-            counter++;
+            counter++; //DEBUG
 
-            //Make sure this hasn't been visited yet. Otherwise, add it to visited.
-            /*if (visited.contains(url)) return;
-            visited.add(url);*/
-
-            //Get document from url. Make thread sleep so only 1 page can be received per second, as demanded by Wikipedia.
-            /*Document doc;
-            synchronized (key) {
-                try {
-                    doc = Jsoup.connect(url).get();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    return;
-                }
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }*/
-
-            previous.add(doc.title());
+            previous.add(doc.title()); //Add current url to the sequence.
 
             //Check if the current page is the one being searched for.
             if (url.equalsIgnoreCase(end)) {
@@ -175,19 +135,20 @@ public class WikiCrawler {
                         e.printStackTrace();
                         continue;
                     }
-                    System.out.println(href + step);
-                    /*try {
+                    System.out.println(href + " " + step);
+                    try {
                         Thread.sleep(1000);
                     } catch (InterruptedException e) {
                         e.printStackTrace();
-                    }*/
+                    }
                 }
-                tPool.submit(new WikiPage("https://en.wikipedia.org" + href, linkPage, (byte)(step+1), previous)); //Add page to threadpool if next step is within upper bound.
+                tPool.submit(new WikiPage("https://en.wikipedia.org" + href, linkPage, (byte)(step+1),
+                        new LinkedList<>(previous))); //Add page to threadpool if next step is within upper bound.
             }
 
-            if (tPool.getQueue().isEmpty()) {
+            if (step == steps && tPool.getQueue().isEmpty()) {
                 stop();
-                //tPool.shutdown();
+                tPool.shutdown();
             }
         }
     }
