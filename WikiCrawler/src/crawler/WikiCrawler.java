@@ -28,7 +28,7 @@ public class WikiCrawler {
                 return ((WikiPage) o1).compareTo((WikiPage) o2);
             }));
     private final byte steps;
-    private final String end;
+    private String end;
     private List<String> sequence = null;
     private Set<String> visited = new HashSet<>();
 
@@ -54,7 +54,12 @@ public class WikiCrawler {
                 e.printStackTrace();
             }
         }
-        this.end = end;
+        try {
+            this.end = URLDecoder.decode(end, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+            this.end = end;
+        }
     }
 
     private static long time;
@@ -62,7 +67,7 @@ public class WikiCrawler {
 
     public static void main(String[] args) {
         time = System.currentTimeMillis();
-        WikiCrawler c = new WikiCrawler("https://en.wikipedia.org/wiki/Question_mark_(disambiguation)", (byte) 1,
+        WikiCrawler c = new WikiCrawler("https://en.wikipedia.org/wiki/Special:Random", (byte) 1,
                 "https://en.wikipedia.org/wiki/Lee_Chiao-ju");
     }
 
@@ -101,7 +106,7 @@ public class WikiCrawler {
 
         @Override
         public void run() {
-            counter++; //DEBUG
+            counter++;
 
             previous.add(doc.title()); //Add current url to the sequence.
 
@@ -115,9 +120,15 @@ public class WikiCrawler {
             if (main == null) return; //Return if no text exists or text couldn't be found.
             Elements links = main.select("a"); //Get all a tags in the text.
             for (Element link : links) {
-                if (step > steps) break;
+                if (step >= steps) break;
                 String href = link.attr("href"); //Get url from link.
-                if (href.equals("") || !href.startsWith("/wiki/")) continue; //Go to next link if url doesn't exist or couldn't be found or leaves Wikipedia.
+
+                //Go to next link if url doesn't exist, couldn't be found, leaves Wikipedia, or goes to a page type we don't want.
+                if (href.equals("") || !href.startsWith("/wiki/") || href.startsWith("/wiki/File:")
+                        || href.startsWith("/wiki/Portal:") || href.startsWith("/wiki/Help:")
+                        || href.startsWith("/wiki/Template:") || href.startsWith("/wiki/Category:")
+                        || href.startsWith("/wiki/Template_talk:")) continue;
+
                 try {
                     href = URLDecoder.decode(href, doc.charset().displayName()); //Translate unicode to actual characters using charset of page.
                 } catch (UnsupportedEncodingException e) {
