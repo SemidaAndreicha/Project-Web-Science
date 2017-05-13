@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -21,19 +22,20 @@ public class WikiCrawler {
     private ThreadPoolExecutor tPool = new ThreadPoolExecutor(5, 10, 50000L,
             TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
     private final byte steps;
-    private Set<String> visitedOut = new HashSet<>();
-    private Set<String> visitedIn = new HashSet<>();
+    private static Set<String> visitedOut = new HashSet<>();
+    private static Set<String> visitedIn = new HashSet<>();
     private Map<String, List<String>> allAdj = new HashMap<>();
+    private CountDownLatch latch;
 
     public WikiCrawler() {
         this((byte) 3);
     }
 
     public WikiCrawler(byte steps) {
-        this("https://en.wikipedia.org/wiki/thing", steps);
+        this("https://en.wikipedia.org/wiki/thing", steps, new CountDownLatch(1));
     }
 
-    public WikiCrawler(String start, byte steps) {
+    public WikiCrawler(String start, byte steps, CountDownLatch latch) {
         this.steps = (byte) Math.min(steps, 6);
         tPool.submit(() -> {
             try {
@@ -42,34 +44,48 @@ public class WikiCrawler {
                 e.printStackTrace();
             }
         });
-        tPool.submit(() -> {
+        this.latch = latch;
+        /*tPool.submit(() -> {
             try {
                 readPageIn(URLDecoder.decode(start, "UTF-8"), (byte) 0);
             } catch (UnsupportedEncodingException e) {
                 e.printStackTrace();
             }
-        });
+        });*/
     }
 
     public Map<String, List<String>> getAllAdj() {
         return new LinkedHashMap<>(allAdj);
     }
 
-    private static long time;
+    public static long time;
     private static int counter = 0;
 
     public static void main(String[] args) {
         time = System.currentTimeMillis();
-        WikiCrawler c = new WikiCrawler("https://en.wikipedia.org/wiki/Special:Random", (byte) 0);
+        WikiCrawler c = new WikiCrawler("https://en.wikipedia.org/wiki/Special:Random", (byte) 0,
+                new CountDownLatch(1)
+        );
     }
 
     private void stop() {
         System.out.println("Time: " + (System.currentTimeMillis() - time) + " Pages: " + counter);
+
+        while (!tPool.isShutdown()) {
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        latch.countDown();
     }
 
     private void readPageOut(String url, byte step) {
+        if (visitedOut.contains(url.substring(30))) return;
         counter++;
-        System.out.println(url.substring(30));
+        //System.out.println(url.substring(30));
 
         Document page;
         synchronized (key) {
@@ -91,6 +107,7 @@ public class WikiCrawler {
         Element main = page.body().select("div#bodyContent").first(); //Get all div tags that match id "bodyContent". Only one could match, so first is chosen.
         if (main == null) return; //Return if no text exists or text couldn't be found.
         Elements links = main.select("a"); //Get all a tags in the text.
+        System.out.println(url + " - " + links.size());
         for (Element link : links) {
             String href; //Get url from link.
             try {
@@ -104,21 +121,31 @@ public class WikiCrawler {
             if (href.equals("") || !href.startsWith("/wiki/") || href.startsWith("/wiki/File:")
                     || href.startsWith("/wiki/Portal:") || href.startsWith("/wiki/Help:")
                     || href.startsWith("/wiki/Template:") || href.startsWith("/wiki/Category:")
-                    || href.startsWith("/wiki/Template_talk:") || href.startsWith("/w/")) continue;
+                    || href.startsWith("/wiki/Template_talk:") || href.startsWith("/wiki/User_talk:")
+                    || href.startsWith("/wiki/Talk:") || href.startsWith("/wiki/Wikipedia:")
+                    || href.startsWith("/wiki/Special:") || href.startsWith("/wiki/List_")
+                    || href.endsWith("(disambiguation)") || href.startsWith("/wiki/User:")
+                    || href.startsWith("/wiki/Category_talk:") || href.contains(":")
+                    || href.startsWith("/w/")) continue;
 
             adjacent.add("https://en.wikipedia.org" + href);
 
-            if (visitedOut.contains(href)) continue;
-
-            if (step < steps) {
+            if (step < steps && !visitedOut.contains(href)) {
                 tPool.submit(() -> readPageOut("https://en.wikipedia.org" + href, (byte)(step+1))); //Add page to threadpool if next step is within upper bound.
                 visitedOut.add(href);
             }
         }
 
         if (step == steps && tPool.getQueue().isEmpty()) {
-            stop();
-            if (!tPool.isShutdown()) tPool.shutdown();
+            tPool.submit(this::stop);
+            tPool.submit(() -> {
+                try {
+                    Thread.sleep(10000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                tPool.shutdown();
+            });
         }
 
         if (allAdj.containsKey(url)) allAdj.get(url).addAll(adjacent);
@@ -159,15 +186,21 @@ public class WikiCrawler {
                 continue;
             }
 
+            if (link.text().equals("next 5,000"))
+                tPool.submit(() -> readPageIn("https://en.wikipedia.org" + href, (byte)(step+1)));
+
             //Go to next link if url doesn't exist, couldn't be found, leaves Wikipedia, or goes to a page type we don't want.
             if (href.equals("") || !href.startsWith("/wiki/") || href.startsWith("/wiki/File:")
                     || href.startsWith("/wiki/Portal:") || href.startsWith("/wiki/Help:")
                     || href.startsWith("/wiki/Template:") || href.startsWith("/wiki/Category:")
-                    || href.startsWith("/wiki/Template_talk:") || href.startsWith("/w/")) continue;
+                    || href.startsWith("/wiki/Template_talk:") || href.startsWith("/wiki/User_talk:")
+                    || href.startsWith("/wiki/Talk:") || href.startsWith("/wiki/Wikipedia:")
+                    || href.startsWith("/wiki/Special:") || href.startsWith("/wiki/List_")
+                    || href.endsWith("(disambiguation)") || href.startsWith("/wiki/User:")
+                    || href.startsWith("/wiki/Category_talk:") || href.contains(":")
+                    || href.startsWith("/w/")) continue;
 
-            if (visitedIn.contains(href)) continue;
-
-            if (step < steps) {
+            if (step < steps && !visitedIn.contains(href)) {
                 tPool.submit(() -> readPageIn("https://en.wikipedia.org" + href, (byte)(step+1))); //Add page to threadpool if next step is within upper bound.
                 visitedIn.add(href);
             }
@@ -179,8 +212,15 @@ public class WikiCrawler {
         }
 
         if (step == steps && tPool.getQueue().isEmpty()) {
-            stop();
-            if (!tPool.isShutdown()) tPool.shutdown();
+            tPool.submit(this::stop);
+            tPool.submit(() -> {
+                try {
+                    Thread.sleep(10000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                tPool.shutdown();
+            });
         }
     }
 }
