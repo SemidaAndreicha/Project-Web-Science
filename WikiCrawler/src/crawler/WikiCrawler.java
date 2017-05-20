@@ -35,6 +35,8 @@ public class WikiCrawler {
         this("https://en.wikipedia.org/wiki/thing", steps, new CountDownLatch(1));
     }
 
+    private static int c = 0;
+
     public WikiCrawler(String start, byte steps, CountDownLatch latch) {
         this.steps = (byte) Math.min(steps, 6);
         tPool.submit(() -> {
@@ -69,8 +71,6 @@ public class WikiCrawler {
     }
 
     private void stop() {
-        System.out.println("Time: " + (System.currentTimeMillis() - time) + " Pages: " + counter);
-
         while (!tPool.isShutdown()) {
             try {
                 Thread.sleep(1000);
@@ -80,12 +80,13 @@ public class WikiCrawler {
         }
 
         latch.countDown();
+        counter++;
+        System.out.println("Time: " + (System.currentTimeMillis() - time) + " Latch down: " + counter);
     }
 
     private void readPageOut(String url, byte step) {
         if (visitedOut.contains(url.substring(30))) return;
-        counter++;
-        //System.out.println(url.substring(30));
+        visitedOut.add(url.substring(30));
 
         Document page;
         synchronized (key) {
@@ -107,7 +108,6 @@ public class WikiCrawler {
         Element main = page.body().select("div#bodyContent").first(); //Get all div tags that match id "bodyContent". Only one could match, so first is chosen.
         if (main == null) return; //Return if no text exists or text couldn't be found.
         Elements links = main.select("a"); //Get all a tags in the text.
-        System.out.println(url + " - " + links.size());
         for (Element link : links) {
             String href; //Get url from link.
             try {
@@ -130,9 +130,8 @@ public class WikiCrawler {
 
             adjacent.add("https://en.wikipedia.org" + href);
 
-            if (step < steps && !visitedOut.contains(href)) {
+            if (step < steps) {
                 tPool.submit(() -> readPageOut("https://en.wikipedia.org" + href, (byte)(step+1))); //Add page to threadpool if next step is within upper bound.
-                visitedOut.add(href);
             }
         }
 
@@ -140,7 +139,7 @@ public class WikiCrawler {
             tPool.submit(this::stop);
             tPool.submit(() -> {
                 try {
-                    Thread.sleep(10000);
+                    Thread.sleep(20000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -152,7 +151,7 @@ public class WikiCrawler {
         else allAdj.put(url, adjacent);
     }
 
-    private void readPageIn(String url, byte step) {
+    /*private void readPageIn(String url, byte step) {
         counter++;
 
         Document page;
@@ -222,5 +221,5 @@ public class WikiCrawler {
                 tPool.shutdown();
             });
         }
-    }
+    }*/
 }
