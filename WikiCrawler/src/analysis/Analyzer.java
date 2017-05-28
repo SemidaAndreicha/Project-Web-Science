@@ -78,7 +78,7 @@ public class Analyzer {
         //Create the result maps.
         Map<String, Integer> ingoingLinks = new HashMap<>(5);
         Map<String, Integer> outgoingLinks = new HashMap<>(5);
-        Map<PortalPair, Integer> pairwiseOutgoing = new HashMap<>(20);
+        Map<PortalPair, Integer> pairwiseOutgoing = new TreeMap<>();
 
         //Create all needed entries in the result maps.
         for (String portal1 : allPortals) {
@@ -123,9 +123,33 @@ public class Analyzer {
             for (Map.Entry<String, Integer> entry : outgoingLinks.entrySet()) {
                 writer.print(entry.getKey() + ": " + entry.getValue() + System.lineSeparator());
             }
+            writer.print(System.lineSeparator() + "Sizes:" + System.lineSeparator());
+            for (Map.Entry<String, Set<String>> entry : portalToPages.entrySet()) {
+                writer.print(entry.getKey() + ": " + entry.getValue().size() + System.lineSeparator());
+            }
+            writer.print(System.lineSeparator() + "In/out ratios:" + System.lineSeparator());
+            for (String portal : allPortals) {
+                writer.print(portal + ": " + ((double)ingoingLinks.get(portal)) / ((double)outgoingLinks.get(portal))
+                        + System.lineSeparator()
+                );
+            }
             writer.print(System.lineSeparator() + "Links between:" + System.lineSeparator());
             for (Map.Entry<PortalPair, Integer> entry : pairwiseOutgoing.entrySet()) {
                 writer.print(entry.getKey().toString() + ": " + entry.getValue() + System.lineSeparator());
+            }
+            writer.print(System.lineSeparator() + "Tospecific/in ratios:" + System.lineSeparator());
+            for (Map.Entry<PortalPair, Integer> entry : pairwiseOutgoing.entrySet()) {
+                writer.print(entry.getKey().toString() + ": " +
+                        ((double)entry.getValue()) / ((double)ingoingLinks.get(entry.getKey().getPortal1()))
+                        + System.lineSeparator()
+                );
+            }
+            writer.print(System.lineSeparator() + "Tospecific/out ratios:" + System.lineSeparator());
+            for (Map.Entry<PortalPair, Integer> entry : pairwiseOutgoing.entrySet()) {
+                writer.print(entry.getKey().toString() + ": " +
+                        ((double)entry.getValue()) / ((double)outgoingLinks.get(entry.getKey().getPortal1()))
+                        + System.lineSeparator()
+                );
             }
         } catch (FileNotFoundException | UnsupportedEncodingException e) {
             e.printStackTrace();
@@ -173,7 +197,7 @@ public class Analyzer {
     /**
      * Represents a directed pair of portals.
      */
-    private static class PortalPair {
+    private static class PortalPair implements Comparable<PortalPair> {
         private String stillAlive;
         private String wantYouGone;
 
@@ -210,6 +234,11 @@ public class Analyzer {
         @Override
         public String toString() {
             return stillAlive + " -> " + wantYouGone;
+        }
+
+        @Override
+        public int compareTo(PortalPair o) {
+            return stillAlive.equals(o.stillAlive) ? wantYouGone.compareToIgnoreCase(o.wantYouGone) : stillAlive.compareToIgnoreCase(o.stillAlive);
         }
     }
 }
